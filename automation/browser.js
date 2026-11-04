@@ -3,8 +3,8 @@ const { chromium } = require('playwright');
 
 const QUREO_URL = 'https://me-portal.qureo.education/login';
 
-async function inspectPage(page, errors) {
-  return await page.evaluate((pageErrors) => {
+async function inspectPage(page, errors, failedScripts) {
+  return await page.evaluate(({ pageErrors, scripts }) => {
     const visible = (el) => {
       const rect = el.getBoundingClientRect();
       const style = getComputedStyle(el);
@@ -53,9 +53,13 @@ async function inspectPage(page, errors) {
       buttons,
       iframes,
       scriptsCount: document.scripts.length,
-      pageErrors
+      pageErrors,
+      failedScripts: scripts
     };
-  }, errors);
+  }, {
+    pageErrors: errors,
+    scripts: failedScripts
+  });
 }
 
 async function openQureo() {
@@ -66,6 +70,7 @@ async function openQureo() {
   try {
     const page = await browser.newPage();
     const errors = [];
+    const failedScripts = [];
 
     page.on('pageerror', error => {
       errors.push(error.message);
@@ -77,6 +82,21 @@ async function openQureo() {
       }
     });
 
+    page.on('response', response => {
+      if (response.request().resourceType() === 'script') {
+        const contentType =
+          response.headers()['content-type'] || '';
+
+        if (!contentType.includes('javascript')) {
+          failedScripts.push({
+            url: response.url(),
+            status: response.status(),
+            contentType
+          });
+        }
+      }
+    });
+
     await page.goto(QUREO_URL, {
       waitUntil: 'domcontentloaded',
       timeout: 60000
@@ -84,7 +104,11 @@ async function openQureo() {
 
     await page.waitForTimeout(7000);
 
-    const result = await inspectPage(page, errors);
+    const result = await inspectPage(
+      page,
+      errors,
+      failedScripts
+    );
 
     const hasLoginFields = result.fields.some(
       field => field.type === 'password'
