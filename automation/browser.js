@@ -15,32 +15,6 @@ async function inspectPage(page, errors, failedScripts) {
         style.visibility !== 'hidden';
     };
 
-    const fields = [...document.querySelectorAll('input')]
-      .filter(visible)
-      .map(el => ({
-        type: el.type,
-        placeholder: el.placeholder,
-        name: el.name,
-        id: el.id
-      }));
-
-    const buttons = [
-      ...document.querySelectorAll(
-        'button, [role="button"], input[type="submit"]'
-      )
-    ]
-      .filter(visible)
-      .map(el => ({
-        text: (el.innerText || el.value || '').trim(),
-        ariaLabel: el.getAttribute('aria-label')
-      }));
-
-    const iframes = [...document.querySelectorAll('iframe')]
-      .map(el => ({
-        src: el.src,
-        title: el.title
-      }));
-
     return {
       title: document.title,
       url: location.href,
@@ -49,9 +23,31 @@ async function inspectPage(page, errors, failedScripts) {
       headings: [...document.querySelectorAll('h1,h2,h3')]
         .filter(visible)
         .map(el => el.innerText.trim()),
-      fields,
-      buttons,
-      iframes,
+
+      fields: [...document.querySelectorAll('input')]
+        .filter(visible)
+        .map(el => ({
+          type: el.type,
+          placeholder: el.placeholder,
+          name: el.name,
+          id: el.id
+        })),
+
+      buttons: [...document.querySelectorAll(
+        'button, [role="button"], input[type="submit"]'
+      )]
+        .filter(visible)
+        .map(el => ({
+          text: (el.innerText || el.value || '').trim(),
+          ariaLabel: el.getAttribute('aria-label')
+        })),
+
+      iframes: [...document.querySelectorAll('iframe')]
+        .map(el => ({
+          src: el.src,
+          title: el.title
+        })),
+
       scriptsCount: document.scripts.length,
       pageErrors,
       failedScripts: scripts
@@ -129,4 +125,3 @@ module.exports = {
   inspectPage,
   openQureo
 };
-failedScripts: scripts
