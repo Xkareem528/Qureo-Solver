@@ -1,68 +1,64 @@
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
+const { Pool } = require('pg');
 
-const dbPath = process.env.DB_PATH || path.join(__dirname, 'qureo.db');
-
-const db = new sqlite3.Database(dbPath, err => {
-  if (err) {
-    console.error('SQLite:', err.message);
-  } else {
-    db.serialize(() => {
-      db.run('PRAGMA foreign_keys = ON');
-
-      db.run(`
-        CREATE TABLE IF NOT EXISTS chapters (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          title TEXT NOT NULL,
-          description TEXT,
-          order_index INTEGER DEFAULT 0
-        )
-      `);
-
-      db.run(`
-        CREATE TABLE IF NOT EXISTS questions (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          chapter_id INTEGER,
-          question_text TEXT NOT NULL,
-          options_json TEXT NOT NULL,
-          correct_answer TEXT NOT NULL,
-          normalized_hash TEXT UNIQUE NOT NULL,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY(chapter_id) REFERENCES chapters(id)
-        )
-      `);
-
-      db.run(`
-        CREATE TABLE IF NOT EXISTS progress (
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          chapter_id INTEGER UNIQUE,
-          completed_questions INTEGER DEFAULT 0,
-          total_questions INTEGER DEFAULT 0,
-          status TEXT DEFAULT 'In Progress',
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY(chapter_id) REFERENCES chapters(id)
-        )
-      `);
-
-      db.get('SELECT COUNT(*) AS n FROM chapters', [], (e, row) => {
-        if (!e && row && row.n === 0) {
-          const s = db.prepare(
-            'INSERT INTO chapters(title, description, order_index) VALUES(?,?,?)'
-          );
-
-          for (let i = 1; i <= 42; i++) {
-            s.run(
-              `الفصل ${i}`,
-              'فصل تجريبي — أضف بياناته عند توفرها',
-              i
-            );
-          }
-
-          s.finalize();
-        }
-      });
-    });
-  }
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL
+    ? { rejectUnauthorized: false }
+    : false
 });
 
-module.exports = db;
+pool.on('error', err => {
+  console.error('PostgreSQL error:', err.message);
+});
+
+async function initDatabase() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS chapters (
+      id SERIAL PRIMARY KEY,
+      title TEXT NOT NULL,
+      description TEXT,
+      order_index INTEGER DEFAULT 0
+    );
+
+    CREATE TABLE IF NOT EXISTS questions (
+      id SERIAL PRIMARY KEY,
+      chapter_id INTEGER REFERENCES chapters(id),
+      question_text TEXT NOT NULL,
+      options_json TEXT NOT NULL,
+      correct_answer TEXT NOT NULL,
+      normalized_hash TEXT UNIQUE NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE TABLE IF NOT EXISTS progress (
+      id SERIAL PRIMARY KEY,
+      chapter_id INTEGER UNIQUE REFERENCES chapters(id),
+      completed_questions INTEGER DEFAULT 0,
+      total_questions INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'In Progress',
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+
+  const result = await pool.query(
+    'SELECT COUNT(*) AS n FROM chapters'
+  );
+
+  if (Number(result.rows[0].n) === 0) {
+    for (let i = 1; i <= 42; i++) {
+      await pool.query(
+        `INSERT INTO chapters (title, description, order_index)
+         VALUES ($1, $2, $3)`,
+        [
+          `الفصل ${i}`,
+          'فصل تجريبي — أضف بياناته عند توفرها',
+          i
+        ]
+      );
+    }
+  }
+
+  console.log('PostgreSQL database initialized');
+}
+
+module.exports = { pool, initDatabase };
