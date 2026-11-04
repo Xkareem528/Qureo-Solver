@@ -59,7 +59,15 @@ async function inspectPage(page, errors, failedScripts) {
 }
 
 async function openQureo() {
-  const browser = await chromium.launch({
+  const context = await browser.newContext({
+  userAgent:
+    'Mozilla/5.0 (Linux; Android 12) AppleWebKit/537.36 Chrome/130.0.0.0 Mobile Safari/537.36',
+  extraHTTPHeaders: {
+    Referer: 'https://me-portal.qureo.education/'
+  }
+});
+
+const page = await context.newPage();
     headless: true
   });
 
