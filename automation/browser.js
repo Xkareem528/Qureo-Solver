@@ -129,3 +129,4 @@ module.exports = {
   inspectPage,
   openQureo
 };
+failedScripts: scripts
