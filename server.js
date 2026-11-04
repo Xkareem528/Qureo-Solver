@@ -268,6 +268,26 @@ async function startServer() {
     process.exit(1);
   }
 }
+app.get('/api/qureo/status', async (req, res) => {
+  try {
+    const result = await openQureo();
+
+    res.json({
+      success: true,
+      message: 'تم فحص صفحة QUREO',
+      ...result
+    });
+
+  } catch (error) {
+    console.error('QUREO connection error:', error.message);
+
+    res.status(500).json({
+      success: false,
+      error: 'تعذر فتح صفحة QUREO',
+      details: error.message
+    });
+  }
+});
 
 startServer();
         
