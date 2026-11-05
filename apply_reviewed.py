@@ -14,8 +14,8 @@ resolved = {
     if x.get("audit_category") == "resolved"
 }
 
-if len(resolved) != 5:
-    raise SystemExit(f"توقف: المتوقع 5 حالات، الموجود {len(resolved)}")
+if len(resolved) != 7:
+    raise SystemExit(f"توقف: المتوقع 7 حالات، الموجود {len(resolved)}")
 
 backup = main_path.with_suffix(".json.bak")
 shutil.copy2(main_path, backup)
@@ -34,9 +34,9 @@ for item in main:
     item["review_status"] = "classified_not_verified"
     updated += 1
 
-if updated != 5:
+if updated != 7:
     raise SystemExit(
-        f"توقف: تم العثور على {updated} من 5 فقط. النسخة الأصلية محفوظة."
+        f"توقف: تم العثور على {updated} من 7 فقط. النسخة الأصلية محفوظة."
     )
 
 main_path.write_text(

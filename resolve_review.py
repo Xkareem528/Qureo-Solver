@@ -5,6 +5,16 @@ path = Path("data/implicit_review.json")
 data = json.loads(path.read_text(encoding="utf-8"))
 
 rules = {
+    (5, 662): (
+        "code",
+        "let fish;\nfish = 0;\nconsole.log(fish);",
+        "manual_classification"
+    ),
+    (14, 2343): (
+        "code",
+        "return result",
+        "manual_classification"
+    ),
     (10, 1534): ("text", "Protractor", "manual_classification"),
     (15, 2437): ("text", "سلسلة نصية", "manual_classification"),
     (15, 2441): ("text", "القيمة العددية", "manual_classification"),
