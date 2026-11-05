@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
+const { spawn } = require('child_process');
 const { pool, initDatabase } = require('./database');
 
 const app = express();
@@ -658,6 +659,114 @@ async function startServer() {
     process.exit(1);
   }
 }
+
+const qureoLoginAttempts = new Map();
+
+app.post('/api/qureo/connect', (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || 'unknown';
+  const now = Date.now();
+  const previous = qureoLoginAttempts.get(ip) || [];
+  const recent = previous.filter(time => now - time < 15 * 60 * 1000);
+
+  if (recent.length >= 5) {
+    return res.status(429).json({
+      success: false,
+      error: 'محاولات كثيرة. حاول بعد 15 دقيقة.'
+    });
+  }
+
+  const { student_id, password } = req.body || {};
+
+  if (
+    typeof student_id !== 'string' ||
+    typeof password !== 'string' ||
+    !student_id.trim() ||
+    !password ||
+    student_id.length > 100 ||
+    password.length > 256
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: 'بيانات الدخول غير صالحة'
+    });
+  }
+
+  recent.push(now);
+  qureoLoginAttempts.set(ip, recent);
+
+  const python = spawn(
+    process.env.PYTHON_BIN || 'python3',
+    [path.join(__dirname, 'agent.py')],
+    { stdio: ['pipe', 'pipe', 'ignore'] }
+  );
+
+  let output = '';
+  let finished = false;
+
+  const timeout = setTimeout(() => {
+    if (!finished) {
+      finished = true;
+      python.kill();
+      res.status(504).json({
+        success: false,
+        error: 'انتهت مهلة الاتصال بمنصة QUREO'
+      });
+    }
+  }, 40000);
+
+  python.stdout.on('data', chunk => {
+    output += chunk.toString();
+    if (output.length > 100000) python.kill();
+  });
+
+  python.on('error', () => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+    res.status(500).json({
+      success: false,
+      error: 'تعذر تشغيل Python Agent'
+    });
+  });
+
+  python.on('close', code => {
+    if (finished) return;
+    finished = true;
+    clearTimeout(timeout);
+
+    try {
+      const result = JSON.parse(output.trim());
+
+      if (result.ok) {
+        return res.json({
+          success: true,
+          authenticated: true,
+          user: result.user
+        });
+      }
+
+      return res.status(401).json({
+        success: false,
+        error: result.error || 'فشل الاتصال',
+        stage: result.stage || null,
+        status: result.status || null
+      });
+    } catch {
+      return res.status(500).json({
+        success: false,
+        error: code === 0
+          ? 'استجابة غير مفهومة من Python Agent'
+          : 'فشل تشغيل Python Agent'
+      });
+    }
+  });
+
+  python.stdin.end(JSON.stringify({
+    student_id: student_id.trim(),
+    password
+  }));
+});
+
 app.get('/api/qureo/status', async (req, res) => {
   try {
     const result = await openQureo();
