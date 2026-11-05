@@ -1,268 +1,162 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ar" dir="rtl">
 <head>
-<meta charset="utf-8">
+<meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>QUREO Solver</title>
+<title>QUREO SOLVER</title>
 <style>
-:root{--bg:#080910;--panel:#11131d;--panel2:#0b0d14;--line:#292c3a;--text:#f2f2fa;--muted:#999caf;--purple:#8060f6;--green:#27c6a3;--red:#f06b78;--yellow:#e6bd68}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI",Tahoma,Arial,sans-serif}
-.wrap{max-width:900px;margin:auto;padding:22px 16px 55px}
-header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--line);padding-bottom:20px}
-.brand{font-size:23px;font-weight:850;letter-spacing:1px}.brand b{color:var(--purple)}
-.status{font-size:13px;color:var(--muted)}
-.hero{padding:40px 0 25px}.eyebrow{color:var(--purple);font-weight:750}
-h1{font-size:clamp(32px,7vw,48px);margin:12px 0}
-p{color:var(--muted);line-height:1.8}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:22px 0}
-.card,.stat{background:var(--panel);border:1px solid var(--line);border-radius:20px;padding:21px}
-.stat strong{font-size:29px;display:block}.stat span{font-size:13px;color:var(--muted)}
-h2{font-size:22px;margin:0 0 8px}
-.section{margin-top:22px}
-label{display:block;font-weight:700;margin:20px 0 10px}
-input,select{width:100%;background:var(--panel2);border:1px solid var(--line);border-radius:13px;padding:15px;color:var(--text);font:inherit;font-size:16px}
-input:focus,select:focus{outline:1px solid var(--purple)}
-button{border:0;border-radius:13px;background:var(--purple);color:white;padding:13px 19px;font:inherit;font-weight:750;cursor:pointer}
-button:disabled{opacity:.55;cursor:wait}
-button.secondary{background:#252736}
-.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
-.hint{font-size:13px;color:var(--muted)}
-.result{margin-top:18px;display:grid;gap:12px}
-.candidate{background:var(--panel2);border:1px solid var(--line);border-radius:15px;padding:16px}
-.candidate h3{font-size:16px;line-height:1.8;margin:0 0 10px;white-space:pre-wrap}
-.meta{display:flex;gap:8px;flex-wrap:wrap;color:var(--muted);font-size:12px}
-.tag{background:#242139;color:#c5b8ff;padding:5px 9px;border-radius:20px}
-.answer{white-space:pre-wrap;overflow-wrap:anywhere;background:#141724;padding:12px;border-radius:10px;margin-top:12px;font-size:14px;direction:auto}
-.notice{padding:13px;border:1px solid #514326;background:#211b12;color:#e4c987;border-radius:13px;line-height:1.8;font-size:13px;margin-top:14px}
-.log{background:var(--panel2);border:1px solid var(--line);border-radius:14px;padding:15px;margin-top:14px;line-height:1.8;overflow-wrap:anywhere}
-.good{color:var(--green)}.bad{color:var(--red)}.warn{color:var(--yellow)}
-.empty{color:var(--muted);text-align:center;padding:22px}
-footer{border-top:1px solid var(--line);margin-top:50px;padding-top:20px;color:var(--muted);font-size:13px}
-@media(max-width:560px){.grid{gap:7px}.stat{padding:14px 8px}.stat strong{font-size:22px}.card{padding:17px}.wrap{padding:16px 12px}}
+body{margin:0;background:#090b10;color:#f4f5f7;font-family:Arial,sans-serif;min-height:100vh;padding:25px 15px}
+main{max-width:760px;margin:45px auto}
+header{text-align:center;margin-bottom:28px}
+h1{font-size:30px;letter-spacing:2px;margin:0 0 9px}
+.sub{color:#9299a8;font-size:14px}
+.card{background:#121620;border:1px solid #252c39;border-radius:15px;padding:22px;margin-bottom:17px}
+label{display:block;margin:15px 0 8px;color:#cbd0da;font-size:14px}
+input{width:100%;padding:14px;border-radius:9px;border:1px solid #30394a;background:#0b0e15;color:white;font-size:16px;outline:none}
+input:focus{border-color:#5587ff}
+button{width:100%;border:0;border-radius:9px;background:#3269ed;color:white;padding:15px;font-size:16px;font-weight:bold;cursor:pointer;margin-top:20px}
+button:disabled{opacity:.6;cursor:wait}
+#message{margin-top:17px;color:#aab2c1;text-align:center;font-size:14px;line-height:1.8}
+.good{color:#49d69b}.bad{color:#ff7373}.warn{color:#ffc66d}
+.hidden{display:none}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:17px 0}
+.stat{background:#0b0e15;border:1px solid #252c39;border-radius:10px;padding:15px 8px;text-align:center}
+.stat strong{display:block;font-size:25px;margin-bottom:6px}
+.stat span{font-size:12px;color:#aab2c1}
+.chapter{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #252c39}
+.chapter:last-child{border:0}
+.chapter-name{font-size:14px;line-height:1.6}
+.status{font-size:12px;white-space:nowrap}
+.course-title{font-size:19px;margin:0 0 10px}
+.error{background:#291c16;border:1px solid #69402b;color:#ffc18e;padding:12px;border-radius:9px;margin-top:12px;font-size:13px}
+footer{text-align:center;color:#657083;font-size:12px;margin-top:25px}
+@media(max-width:450px){main{margin:20px auto}.card{padding:16px}.stats{gap:6px}.stat strong{font-size:21px}}
 </style>
 </head>
 <body>
-<div class="wrap">
+<main>
 <header>
-  <div class="brand"><b>Q</b>UREO SOLVER</div>
-  <div class="status" id="apiStatus">جاري الاتصال بالسيرفر...</div>
+<h1>QUREO SOLVER</h1>
+<div class="sub">تسجيل الدخول ومتابعة تقدمك في QUREO</div>
 </header>
 
-<section class="hero">
-  <div class="eyebrow">منصة إدارة الأسئلة</div>
-  <h1>قاعدة بياناتك، <b style="color:var(--purple)">متصلة فعليًا.</b></h1>
-  <p>بحث ومطابقة الأسئلة المستوردة، ومتابعة حالة اتصال QUREO.</p>
+<section class="card">
+<form id="loginForm">
+<label for="studentId">كود الطالب</label>
+<input id="studentId" autocomplete="username" required placeholder="أدخل كود الطالب">
+<label for="password">كلمة المرور</label>
+<input id="password" type="password" autocomplete="current-password" required placeholder="أدخل كلمة المرور">
+<button id="startBtn" type="submit">ابدأ الحل</button>
+</form>
+<div id="message" aria-live="polite">أدخل بيانات حسابك لبدء الاتصال بالمنصة.</div>
 </section>
 
-<div class="grid">
-  <div class="stat"><strong id="total">—</strong><span>إجمالي الأسئلة</span></div>
-  <div class="stat"><strong id="levels">—</strong><span>المستويات</span></div>
-  <div class="stat"><strong id="verified">—</strong><span>إجابات معتمدة</span></div>
+<section id="account" class="hidden">
+<div class="card">
+<h2 class="course-title">بيانات الحساب</h2>
+<div id="accountInfo" class="sub"></div>
 </div>
-
-<section class="card section">
-  <h2>مطابقة سؤال</h2>
-  <p>ابحث عن سؤال داخل قاعدة البيانات المستوردة.</p>
-  <label for="question">نص السؤال</label>
-  <input id="question" maxlength="1000" placeholder="اكتب السؤال هنا..." autocomplete="off">
-  <label for="level">المستوى (اختياري)</label>
-  <select id="level">
-    <option value="">كل المستويات</option>
-  </select>
-  <div class="actions">
-    <button id="matchBtn">ابحث وطابق</button>
-    <button class="secondary" id="clearBtn">مسح</button>
-  </div>
-  <div id="matchMessage" class="hint" aria-live="polite"></div>
-  <div id="results" class="result"></div>
-  <div class="notice">درجة التشابه تقدير نصي وليست ضمانًا لصحة الإجابة. الإجابة لا تُعد معتمدة إلا عندما تكون حالة مراجعتها verified.</div>
+<div id="courses"></div>
 </section>
 
-<section class="card section">
-  <h2>اتصال QUREO</h2>
-  <p>فحص قدرة السيرفر على فتح صفحة تسجيل الدخول وقراءة معلومات الصفحة العامة.</p>
-  <div class="actions">
-    <button id="qureoBtn">فحص الاتصال</button>
-  </div>
-  <div id="qureoResult" class="log" aria-live="polite">لم يتم إجراء الفحص بعد.</div>
-  <div class="notice">هذا الفحص لا يسجّل الدخول إلى حسابك ولا يقرأ دروسه حتى الآن.</div>
-</section>
-
-<section class="section">
-  <div class="actions">
-    <button class="secondary" id="refreshBtn">تحديث إحصائيات قاعدة البيانات</button>
-  </div>
-  <div id="statsMessage" class="hint"></div>
-</section>
-
-<footer>QUREO SOLVER — Connected database interface</footer>
-</div>
+<footer>QUREO SOLVER</footer>
+</main>
 
 <script>
 const $ = id => document.getElementById(id);
-const apiStatus = $('apiStatus');
+const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({
+'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+}[c]));
 
-function escapeHTML(value) {
-  return String(value ?? '').replace(/[&<>"']/g, char => ({
-    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
-  })[char]);
-}
+function renderCourses(user) {
+  const root = $('courses');
+  const courses = user.courses || [];
+  const errors = user.course_errors || [];
 
-async function api(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      ...(options.body ? {'Content-Type':'application/json'} : {}),
-      ...options.headers
-    }
-  });
-  const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
-  return data;
-}
-
-async function loadStats() {
-  $('statsMessage').textContent = 'جاري تحميل الإحصائيات...';
-  try {
-    const data = await api('/api/source-questions/stats');
-    $('total').textContent = data.total;
-    $('levels').textContent = data.levels.length;
-    $('verified').textContent =
-      data.review_statuses.find(x => x.status === 'verified')?.count ?? 0;
-
-    const select = $('level');
-    select.innerHTML = '<option value="">كل المستويات</option>' +
-      data.levels.map(x =>
-        `<option value="${Number(x.level)}">المستوى ${Number(x.level)} (${Number(x.count)} سؤال)</option>`
-      ).join('');
-
-    apiStatus.innerHTML = '<span class="good">● السيرفر متصل</span>';
-    $('statsMessage').textContent =
-      `تم تحميل ${data.total} سؤالًا من قاعدة البيانات بنجاح.`;
-  } catch (error) {
-    apiStatus.innerHTML = '<span class="bad">● تعذر الاتصال</span>';
-    $('statsMessage').textContent = 'فشل تحميل الإحصائيات: ' + error.message;
-  }
-}
-
-function renderCandidates(data) {
-  const results = $('results');
-  if (!data.candidates?.length) {
-    results.innerHTML = '<div class="empty">لم يتم العثور على سؤال مطابق بدرجة كافية.</div>';
+  if (!courses.length && !errors.length) {
+    root.innerHTML = '<div class="card">لم تصل بيانات الكورسات من المنصة.</div>';
     return;
   }
 
-  results.innerHTML = data.candidates.map(item => {
-    const score = (Number(item.match_score) * 100).toFixed(2);
-    const status = item.review_status === 'verified'
-      ? '<span class="good">معتمدة</span>'
-      : item.review_status === 'rejected'
-        ? '<span class="bad">مرفوضة</span>'
-        : item.review_status === 'classified_not_verified'
-          ? '<span class="warn">مصنفة وغير معتمدة</span>'
-          : '<span class="warn">بانتظار المراجعة</span>';
+  root.innerHTML = courses.map(course => {
+    const chapters = course.chapters || [];
+    const rows = chapters.map(ch => {
+      const completed = ch.status === 'completed';
+      const missing = ch.status === 'missing';
+      const status = completed ? 'مكتمل' : missing ? 'بيانات غير متاحة' : 'غير مكتمل';
+      const cls = completed ? 'good' : missing ? 'warn' : 'bad';
+      return `<div class="chapter">
+        <div class="chapter-name">
+          الفصل ${Number(ch.seq)} — ${escapeHTML(ch.name || 'بدون اسم')}
+          <div class="sub">عدد الأسئلة: ${Number(ch.question_count || 0)}</div>
+        </div>
+        <span class="status ${cls}">${status}</span>
+      </div>`;
+    }).join('');
 
-    const answer = item.original_answer
-      ? `<div class="answer"><b>الإجابة المصدرية — غير معتمدة تلقائيًا:</b>\n${escapeHTML(item.original_answer)}</div>`
-      : '<div class="answer">لا توجد إجابة مصدرية محفوظة لهذا السؤال.</div>';
-
-    return `<article class="candidate">
-      <h3>${escapeHTML(item.question_text)}</h3>
-      <div class="meta">
-        <span class="tag">المستوى ${Number(item.level)}</span>
-        <span class="tag">${escapeHTML(item.lesson || 'درس غير محدد')}</span>
-        <span class="tag">${escapeHTML(item.question_label || 'سؤال')}</span>
-        <span class="tag">التشابه ${score}%</span>
-        <span>${status}</span>
+    return `<section class="card">
+      <h2 class="course-title">${escapeHTML(course.name || course.content_id)}</h2>
+      <div class="stats">
+        <div class="stat"><strong>${Number(course.total_chapters || 0)}</strong><span>إجمالي الفصول</span></div>
+        <div class="stat"><strong class="good">${Number(course.completed_chapters || 0)}</strong><span>مكتملة</span></div>
+        <div class="stat"><strong>${Number(course.incomplete_chapters || 0)}</strong><span>غير مكتملة</span></div>
       </div>
-      ${answer}
-    </article>`;
+      ${rows || '<div class="sub">لا توجد تفاصيل للفصول.</div>'}
+    </section>`;
   }).join('');
+
+  errors.forEach(error => {
+    root.innerHTML += `<div class="error">تعذر تحميل ${escapeHTML(error.content_id)}: ${escapeHTML(error.error)}</div>`;
+  });
 }
 
-async function matchQuestion() {
-  const question = $('question').value.trim();
-  const level = $('level').value;
-  if (!question) {
-    $('matchMessage').textContent = 'اكتب نص السؤال أولًا.';
-    $('question').focus();
-    return;
-  }
+$('loginForm').addEventListener('submit', async event => {
+  event.preventDefault();
 
-  const button = $('matchBtn');
+  const button = $('startBtn');
+  const message = $('message');
+  const studentId = $('studentId').value.trim();
+  const passwordInput = $('password');
+  const password = passwordInput.value;
+
+  if (!studentId || !password) return;
+
   button.disabled = true;
-  button.textContent = 'جاري البحث...';
-  $('matchMessage').textContent = '';
-  $('results').innerHTML = '';
+  button.textContent = 'جاري الاتصال...';
+  message.textContent = 'جاري تسجيل الدخول وجلب بيانات الحساب والفصول...';
+  $('account').classList.add('hidden');
+  $('courses').innerHTML = '';
 
   try {
-    const data = await api('/api/source-questions/match', {
-      method:'POST',
-      body:JSON.stringify({
-        question_text:question,
-        ...(level ? {level:Number(level)} : {})
-      })
+    const response = await fetch('/api/qureo/connect', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({student_id:studentId,password})
     });
 
-    const confidence = {
-      high:'تطابق قوي',
-      possible:'تطابق محتمل',
-      none:'لا توجد مطابقة'
-    }[data.match_confidence] || 'نتيجة البحث';
+    const data = await response.json();
 
-    $('matchMessage').textContent =
-      `${confidence} — ${data.candidates.length} نتيجة.`;
-    renderCandidates(data);
+    if (!response.ok || !data.authenticated || !data.user) {
+      throw new Error(data.error || 'تعذر تسجيل الدخول.');
+    }
+
+    const user = data.user;
+    $('accountInfo').textContent =
+      'تم تسجيل الدخول بنجاح — الكورسات المتاحة: ' +
+      (user.available_courses || []).length;
+
+    renderCourses(user);
+    $('account').classList.remove('hidden');
+    message.innerHTML = '<span class="good">تم تسجيل الدخول وجلب البيانات بنجاح.</span>';
   } catch (error) {
-    $('matchMessage').textContent = 'حدث خطأ: ' + error.message;
+    message.innerHTML = '<span class="bad">' + escapeHTML(error.message) + '</span>';
   } finally {
+    passwordInput.value = '';
     button.disabled = false;
-    button.textContent = 'ابحث وطابق';
+    button.textContent = 'ابدأ الحل';
   }
-}
-
-async function checkQureo() {
-  const button = $('qureoBtn');
-  button.disabled = true;
-  button.textContent = 'جاري الفحص...';
-  $('qureoResult').textContent = 'السيرفر يحاول فتح صفحة QUREO...';
-
-  try {
-    const data = await api('/api/qureo/status');
-    const page = data.page || {};
-    $('qureoResult').innerHTML =
-      `<span class="good">● نجح فتح الصفحة</span><br>` +
-      `نوع الصفحة: ${escapeHTML(data.pageType || 'غير محدد')}<br>` +
-      `العنوان: ${escapeHTML(page.title || 'غير متاح')}<br>` +
-      `الرابط: ${escapeHTML(page.url || 'غير متاح')}<br>` +
-      `حالة التحميل: ${escapeHTML(page.readyState || 'غير متاحة')}<br>` +
-      `حقول الإدخال الظاهرة: ${Number(page.fields?.length || 0)}<br>` +
-      `أخطاء الصفحة: ${Number(page.pageErrors?.length || 0)}<br>` +
-      `ملفات JavaScript المتعثرة: ${Number(page.failedScripts?.length || 0)}`;
-  } catch (error) {
-    $('qureoResult').innerHTML =
-      `<span class="bad">● فشل فحص QUREO</span><br>${escapeHTML(error.message)}`;
-  } finally {
-    button.disabled = false;
-    button.textContent = 'فحص الاتصال';
-  }
-}
-
-$('matchBtn').addEventListener('click', matchQuestion);
-$('clearBtn').addEventListener('click', () => {
-  $('question').value = '';
-  $('matchMessage').textContent = '';
-  $('results').innerHTML = '';
-  $('question').focus();
 });
-$('qureoBtn').addEventListener('click', checkQureo);
-$('refreshBtn').addEventListener('click', loadStats);
-$('question').addEventListener('keydown', event => {
-  if (event.key === 'Enter') matchQuestion();
-});
-
-loadStats();
 </script>
 </body>
 </html>
