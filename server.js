@@ -3,7 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const crypto = require('crypto');
 const path = require('path');
-const { spawn } = require('child_process');
+const { WebSocketServer } = require('ws');
 const { pool, initDatabase } = require('./database');
 
 const app = express();
@@ -647,12 +647,76 @@ app.post('/api/source-questions/import', async (req, res) => {
   }
 });
 
+
+const pendingJobs = new Map();
+let connectedAgent = null;
+
 async function startServer() {
   try {
     await initDatabase();
 
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`QUREO Solver running on port ${PORT}`);
+    });
+
+    const wss = new WebSocketServer({ noServer: true });
+
+    server.on('upgrade', (req, socket, head) => {
+      if (req.url !== '/agent') {
+        socket.destroy();
+        return;
+      }
+
+      const secret = process.env.AGENT_SECRET || '';
+      const auth = req.headers.authorization || '';
+      const supplied = auth.startsWith('Bearer ') ? auth.slice(7) : '';
+
+      if (!secret || supplied.length !== secret.length ||
+          !crypto.timingSafeEqual(Buffer.from(supplied), Buffer.from(secret))) {
+        socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
+        socket.destroy();
+        return;
+      }
+
+      wss.handleUpgrade(req, socket, head, ws => {
+        wss.emit('connection', ws, req);
+      });
+    });
+
+    wss.on('connection', ws => {
+      if (connectedAgent && connectedAgent.readyState === 1) {
+        connectedAgent.close();
+      }
+
+      connectedAgent = ws;
+      console.log('Termux Agent connected');
+
+      ws.on('message', raw => {
+        let message;
+        try {
+          message = JSON.parse(raw.toString());
+        } catch {
+          return;
+        }
+
+        if (message.type !== 'result' || typeof message.id !== 'string') return;
+
+        const job = pendingJobs.get(message.id);
+        if (!job) return;
+
+        clearTimeout(job.timer);
+        pendingJobs.delete(message.id);
+        job.resolve(message.result);
+      });
+
+      ws.on('close', () => {
+        if (connectedAgent === ws) connectedAgent = null;
+        console.log('Termux Agent disconnected');
+      });
+
+      ws.on('error', () => {
+        if (connectedAgent === ws) connectedAgent = null;
+      });
     });
   } catch (err) {
     console.error('Failed to start server:', err);
@@ -662,7 +726,13 @@ async function startServer() {
 
 const qureoLoginAttempts = new Map();
 
-app.post('/api/qureo/connect', (req, res) => {
+app.get('/api/qureo/agent-status', (req, res) => {
+  res.json({
+    connected: !!connectedAgent && connectedAgent.readyState === 1
+  });
+});
+
+app.post('/api/qureo/connect', async (req, res) => {
   const ip = req.ip || req.socket.remoteAddress || 'unknown';
   const now = Date.now();
   const previous = qureoLoginAttempts.get(ip) || [];
@@ -691,80 +761,63 @@ app.post('/api/qureo/connect', (req, res) => {
     });
   }
 
+  if (!connectedAgent || connectedAgent.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      error: 'Agent الموبايل غير متصل. شغّله أولاً.'
+    });
+  }
+
   recent.push(now);
   qureoLoginAttempts.set(ip, recent);
 
-  const python = spawn(
-    process.env.PYTHON_BIN || 'python3',
-    [path.join(__dirname, 'agent.py')],
-    { stdio: ['pipe', 'pipe', 'ignore'] }
-  );
+  const id = crypto.randomUUID();
 
-  let output = '';
-  let finished = false;
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingJobs.delete(id);
+        reject(new Error('timeout'));
+      }, 40000);
 
-  const timeout = setTimeout(() => {
-    if (!finished) {
-      finished = true;
-      python.kill();
-      res.status(504).json({
-        success: false,
-        error: 'انتهت مهلة الاتصال بمنصة QUREO'
+      pendingJobs.set(id, { resolve, reject, timer });
+
+      connectedAgent.send(JSON.stringify({
+        type: 'login',
+        id,
+        student_id: student_id.trim(),
+        password
+      }), error => {
+        if (error) {
+          clearTimeout(timer);
+          pendingJobs.delete(id);
+          reject(error);
+        }
       });
-    }
-  }, 40000);
-
-  python.stdout.on('data', chunk => {
-    output += chunk.toString();
-    if (output.length > 100000) python.kill();
-  });
-
-  python.on('error', () => {
-    if (finished) return;
-    finished = true;
-    clearTimeout(timeout);
-    res.status(500).json({
-      success: false,
-      error: 'تعذر تشغيل Python Agent'
     });
-  });
 
-  python.on('close', code => {
-    if (finished) return;
-    finished = true;
-    clearTimeout(timeout);
-
-    try {
-      const result = JSON.parse(output.trim());
-
-      if (result.ok) {
-        return res.json({
-          success: true,
-          authenticated: true,
-          user: result.user
-        });
-      }
-
-      return res.status(401).json({
-        success: false,
-        error: result.error || 'فشل الاتصال',
-        stage: result.stage || null,
-        status: result.status || null
-      });
-    } catch {
-      return res.status(500).json({
-        success: false,
-        error: code === 0
-          ? 'استجابة غير مفهومة من Python Agent'
-          : 'فشل تشغيل Python Agent'
+    if (result && result.ok) {
+      return res.json({
+        success: true,
+        authenticated: true,
+        user: result.user
       });
     }
-  });
 
-  python.stdin.end(JSON.stringify({
-    student_id: student_id.trim(),
-    password
-  }));
+    return res.status(401).json({
+      success: false,
+      error: result?.error || 'فشل الاتصال',
+      stage: result?.stage || null,
+      status: result?.status || null
+    });
+  } catch (error) {
+    return res.status(error.message === 'timeout' ? 504 : 503).json({
+      success: false,
+      error: error.message === 'timeout'
+        ? 'انتهت مهلة الاتصال بمنصة QUREO'
+        : 'انقطع اتصال Agent الموبايل'
+    });
+  }
 });
 
 app.get('/api/qureo/status', async (req, res) => {
