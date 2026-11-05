@@ -66,6 +66,55 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
+app.get('/api/source-questions/stats', async (req, res) => {
+  try {
+    const [total, statuses, levels, answers] = await Promise.all([
+      pool.query('SELECT COUNT(*) AS total FROM source_questions'),
+      pool.query(`
+        SELECT review_status, COUNT(*) AS count
+        FROM source_questions
+        GROUP BY review_status
+        ORDER BY review_status
+      `),
+      pool.query(`
+        SELECT level, COUNT(*) AS count
+        FROM source_questions
+        GROUP BY level
+        ORDER BY level
+      `),
+      pool.query(`
+        SELECT
+          COUNT(*) FILTER (WHERE has_answer_marker = TRUE) AS explicit_answers,
+          COUNT(*) FILTER (WHERE has_answer_marker = FALSE) AS missing_markers,
+          COUNT(*) FILTER (
+            WHERE proposed_answer IS NOT NULL AND proposed_answer <> ''
+          ) AS proposed_answers
+        FROM source_questions
+      `)
+    ]);
+
+    res.json({
+      total: Number(total.rows[0].total),
+      review_statuses: statuses.rows.map(row => ({
+        status: row.review_status,
+        count: Number(row.count)
+      })),
+      levels: levels.rows.map(row => ({
+        level: Number(row.level),
+        count: Number(row.count)
+      })),
+      answers: {
+        explicit: Number(answers.rows[0].explicit_answers),
+        missing_markers: Number(answers.rows[0].missing_markers),
+        proposed: Number(answers.rows[0].proposed_answers)
+      }
+    });
+  } catch (error) {
+    console.error('Source stats error:', error.message);
+    res.status(500).json({ error: 'Failed to retrieve source statistics' });
+  }
+});
+
 app.get('/api/chapters', async (req, res) => {
   try {
     const result = await pool.query(
