@@ -364,20 +364,27 @@ app.post('/api/source-questions/match', async (req, res) => {
       params
     );
 
-    const candidates = result.rows
+    const allCandidates = result.rows
       .map(row => ({
         ...row,
         match_score: Number(
           similarityScore(question_text, row.question_text).toFixed(4)
         )
       }))
-      .sort((a, b) => b.match_score - a.match_score)
-      .slice(0, 10);
+      .filter(row => row.match_score >= 0.45)
+      .sort((a, b) => b.match_score - a.match_score);
 
+    const candidates = allCandidates.slice(0, 5);
     const bestScore = candidates[0]?.match_score || 0;
 
+    const matchConfidence =
+      bestScore >= 0.70 ? 'high' :
+      bestScore >= 0.45 ? 'possible' :
+      'none';
+
     res.json({
-      matched: bestScore >= 0.35,
+      matched: bestScore >= 0.45,
+      match_confidence: matchConfidence,
       matching_method: 'arabic_normalized_token_and_character_similarity',
       answer_is_verified: candidates[0]?.review_status === 'verified',
       candidates
