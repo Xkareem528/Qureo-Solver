@@ -1,5 +1,5 @@
 
-const { chromium } = require('playwright');
+
 
 const QUREO_URL = 'https://me-portal.qureo.education/login';
 
@@ -59,6 +59,7 @@ async function inspectPage(page, errors, failedScripts) {
 }
 
 async function openQureo() {
+  const { chromium } = require('playwright');
   const browser = await chromium.launch({
     headless: true
   });
