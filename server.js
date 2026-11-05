@@ -32,6 +32,52 @@ function hashQuestion(question, options) {
     .digest('hex');
 }
 
+
+function normalizeMatchText(value) {
+  return String(value || '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[\u064B-\u065F\u0670\u0640]/g, '')
+    .replace(/[أإآ]/g, 'ا')
+    .replace(/ى/g, 'ي')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function similarityScore(a, b) {
+  const left = normalizeMatchText(a);
+  const right = normalizeMatchText(b);
+
+  if (!left || !right) return 0;
+  if (left === right) return 1;
+
+  const aTokens = new Set(left.split(' '));
+  const bTokens = new Set(right.split(' '));
+  const common = [...aTokens].filter(x => bTokens.has(x)).length;
+
+  const tokenScore =
+    (2 * common) / (aTokens.size + bTokens.size);
+
+  function bigrams(value) {
+    const result = new Set();
+    for (let i = 0; i < value.length - 1; i++) {
+      result.add(value.slice(i, i + 2));
+    }
+    return result;
+  }
+
+  const aGrams = bigrams(left.replace(/\s/g, ''));
+  const bGrams = bigrams(right.replace(/\s/g, ''));
+  const shared = [...aGrams].filter(x => bGrams.has(x)).length;
+
+  const charScore = aGrams.size + bGrams.size
+    ? (2 * shared) / (aGrams.size + bGrams.size)
+    : 0;
+
+  return (tokenScore * 0.65) + (charScore * 0.35);
+}
+
 function validQuestion(b) {
   return b &&
     typeof b.question_text === 'string' &&
@@ -275,6 +321,70 @@ app.post('/api/questions', async (req, res) => {
     res.json({ success: true, id: result.rows[0].id, hash: h });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+
+app.post('/api/source-questions/match', async (req, res) => {
+  try {
+    const { question_text, level } = req.body || {};
+
+    if (
+      typeof question_text !== 'string' ||
+      !question_text.trim() ||
+      question_text.length > 1000
+    ) {
+      return res.status(400).json({
+        error: 'A question_text between 1 and 1000 characters is required'
+      });
+    }
+
+    const params = [];
+    let levelFilter = '';
+
+    if (level !== undefined && level !== null && level !== '') {
+      const parsedLevel = Number(level);
+
+      if (!Number.isInteger(parsedLevel) || parsedLevel < 1 || parsedLevel > 42) {
+        return res.status(400).json({ error: 'Invalid level' });
+      }
+
+      params.push(parsedLevel);
+      levelFilter = 'WHERE level = $1';
+    }
+
+    const result = await pool.query(
+      `SELECT id, level, lesson, question_label, question_text,
+              original_answer, original_answer_type,
+              proposed_answer, proposed_answer_type,
+              has_answer_marker, review_status, source_line
+       FROM source_questions
+       ${levelFilter}
+       LIMIT 1500`,
+      params
+    );
+
+    const candidates = result.rows
+      .map(row => ({
+        ...row,
+        match_score: Number(
+          similarityScore(question_text, row.question_text).toFixed(4)
+        )
+      }))
+      .sort((a, b) => b.match_score - a.match_score)
+      .slice(0, 10);
+
+    const bestScore = candidates[0]?.match_score || 0;
+
+    res.json({
+      matched: bestScore >= 0.35,
+      matching_method: 'arabic_normalized_token_and_character_similarity',
+      answer_is_verified: candidates[0]?.review_status === 'verified',
+      candidates
+    });
+  } catch (error) {
+    console.error('Source question match error:', error.message);
+    res.status(500).json({ error: 'Failed to match source question' });
   }
 });
 
