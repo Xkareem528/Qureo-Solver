@@ -375,7 +375,7 @@ app.post('/api/source-questions/import', async (req, res) => {
           source_file, review_status
         )
         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-        ON CONFLICT (fingerprint) DO UPDATE SET
+        ON CONFLICT (source_file, source_line) DO UPDATE SET
           lesson = CASE
             WHEN source_questions.review_status IN ('verified', 'rejected')
               THEN source_questions.lesson

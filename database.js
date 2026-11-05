@@ -43,7 +43,7 @@ async function initDatabase() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS source_questions (
       id BIGSERIAL PRIMARY KEY,
-      fingerprint TEXT UNIQUE NOT NULL,
+      fingerprint TEXT NOT NULL,
       level INTEGER NOT NULL,
       lesson TEXT,
       question_label TEXT,
@@ -72,6 +72,20 @@ async function initDatabase() {
 
     CREATE INDEX IF NOT EXISTS idx_source_questions_review
       ON source_questions(review_status);
+  `);
+
+  // Migrate source question identity from fingerprint to source position.
+  await pool.query(`
+    ALTER TABLE source_questions
+    DROP CONSTRAINT IF EXISTS source_questions_fingerprint_key;
+
+    CREATE UNIQUE INDEX IF NOT EXISTS
+      idx_source_questions_source_position
+      ON source_questions(source_file, source_line);
+
+    CREATE INDEX IF NOT EXISTS
+      idx_source_questions_fingerprint
+      ON source_questions(fingerprint);
   `);
 
   const result = await pool.query(
