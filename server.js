@@ -116,6 +116,31 @@ app.get('/api/source-questions/stats', async (req, res) => {
 });
 
 
+app.get('/api/source-questions/sample', async (req, res) => {
+  try {
+    const result = await pool.query(`
+      SELECT id, level, lesson, question_label,
+             question_text, original_answer,
+             original_answer_type, source_line
+      FROM source_questions
+      WHERE has_answer_marker = TRUE
+        AND original_answer IS NOT NULL
+        AND original_answer <> ''
+      ORDER BY level, source_line
+      LIMIT 10
+    `);
+
+    res.json({
+      total: result.rows.length,
+      questions: result.rows
+    });
+  } catch (error) {
+    console.error('Source sample error:', error.message);
+    res.status(500).json({ error: 'Failed to retrieve source sample' });
+  }
+});
+
+
 app.get('/api/source-questions/review', async (req, res) => {
   try {
     const result = await pool.query(`
