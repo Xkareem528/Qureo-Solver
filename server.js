@@ -257,6 +257,181 @@ app.delete('/api/questions/:id', async (req, res) => {
   }
 });
 
+
+app.post('/api/source-questions/import', async (req, res) => {
+  const token = process.env.IMPORT_TOKEN;
+
+  if (!token || req.get('x-import-token') !== token) {
+    return res.status(401).json({ error: 'Unauthorized' });
+  }
+
+  const records = req.body?.records;
+
+  if (!Array.isArray(records) || records.length < 1 || records.length > 100) {
+    return res.status(400).json({
+      error: 'records must be an array containing 1 to 100 items'
+    });
+  }
+
+  let client;
+
+  try {
+    client = await pool.connect();
+    await client.query('BEGIN');
+
+    let imported = 0;
+    let updated = 0;
+
+    for (const r of records) {
+      if (
+        !r ||
+        !Number.isInteger(r.level) ||
+        r.level < 1 || r.level > 42 ||
+        typeof r.fingerprint !== 'string' ||
+        !/^[a-f0-9]{64}$/i.test(r.fingerprint) ||
+        typeof r.question !== 'string' ||
+        !r.question.trim() ||
+        typeof r.answer !== 'string' ||
+        typeof r.answer_type !== 'string' ||
+        !r.answer_type.trim() ||
+        (r.lesson != null && typeof r.lesson !== 'string') ||
+        (r.question_label != null && typeof r.question_label !== 'string') ||
+        (r.proposed_answer != null && typeof r.proposed_answer !== 'string') ||
+        (r.proposed_answer_type != null && typeof r.proposed_answer_type !== 'string') ||
+        typeof r.has_answer_marker !== 'boolean' ||
+        (r.review_status != null && ![
+          'pending',
+          'classified_not_verified',
+          'verified',
+          'rejected'
+        ].includes(r.review_status)) ||
+        !Number.isInteger(r.source_line) ||
+        r.source_line < 1
+      ) {
+        throw new Error('Invalid source record');
+      }
+
+      const status = [
+        'pending',
+        'classified_not_verified',
+        'verified',
+        'rejected'
+      ].includes(r.review_status) ? r.review_status : 'pending';
+
+      const result = await client.query(`
+        INSERT INTO source_questions (
+          fingerprint, level, lesson, question_label, question_text,
+          original_answer, original_answer_type, proposed_answer,
+          proposed_answer_type, has_answer_marker, source_line,
+          source_file, review_status
+        )
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+        ON CONFLICT (fingerprint) DO UPDATE SET
+          lesson = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.lesson
+            ELSE EXCLUDED.lesson
+          END,
+          question_label = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.question_label
+            ELSE EXCLUDED.question_label
+          END,
+          question_text = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.question_text
+            ELSE EXCLUDED.question_text
+          END,
+          original_answer = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.original_answer
+            ELSE EXCLUDED.original_answer
+          END,
+          original_answer_type = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.original_answer_type
+            ELSE EXCLUDED.original_answer_type
+          END,
+          proposed_answer = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.proposed_answer
+            ELSE EXCLUDED.proposed_answer
+          END,
+          proposed_answer_type = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.proposed_answer_type
+            ELSE EXCLUDED.proposed_answer_type
+          END,
+          has_answer_marker = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.has_answer_marker
+            ELSE EXCLUDED.has_answer_marker
+          END,
+          source_line = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.source_line
+            ELSE EXCLUDED.source_line
+          END,
+          source_file = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.source_file
+            ELSE EXCLUDED.source_file
+          END,
+          review_status = CASE
+            WHEN source_questions.review_status IN ('verified', 'rejected')
+              THEN source_questions.review_status
+            WHEN source_questions.review_status = 'classified_not_verified'
+              AND EXCLUDED.review_status = 'pending'
+              THEN source_questions.review_status
+            ELSE EXCLUDED.review_status
+          END
+        RETURNING (xmax = 0) AS inserted
+      `, [
+        r.fingerprint,
+        r.level,
+        r.lesson || null,
+        r.question_label || null,
+        r.question.trim(),
+        r.answer,
+        r.answer_type,
+        r.proposed_answer || null,
+        r.proposed_answer_type || null,
+        Boolean(r.has_answer_marker),
+        r.source_line,
+        'Qureo_prompts_levels_1_to_42-3.txt',
+        status
+      ]);
+
+      if (result.rows[0].inserted) imported++;
+      else updated++;
+    }
+
+    await client.query('COMMIT');
+
+    res.json({
+      success: true,
+      received: records.length,
+      inserted: imported,
+      updated
+    });
+  } catch (error) {
+    if (client) {
+      try {
+        await client.query('ROLLBACK');
+      } catch (rollbackError) {
+        console.error('Rollback error:', rollbackError.message);
+      }
+    }
+    console.error('Source import error:', error.message);
+    const isValidationError = error.message === 'Invalid source record';
+    res.status(isValidationError ? 400 : 500).json({
+      error: isValidationError ? error.message : 'Import failed due to a server error'
+    });
+  } finally {
+    if (client) client.release();
+  }
+});
+
 async function startServer() {
   try {
     await initDatabase();

@@ -40,6 +40,40 @@ async function initDatabase() {
     );
   `);
 
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS source_questions (
+      id BIGSERIAL PRIMARY KEY,
+      fingerprint TEXT UNIQUE NOT NULL,
+      level INTEGER NOT NULL,
+      lesson TEXT,
+      question_label TEXT,
+      question_text TEXT NOT NULL,
+      original_answer TEXT,
+      original_answer_type TEXT NOT NULL,
+      proposed_answer TEXT,
+      proposed_answer_type TEXT,
+      has_answer_marker BOOLEAN NOT NULL DEFAULT FALSE,
+      source_line INTEGER NOT NULL,
+      source_file TEXT NOT NULL,
+      review_status TEXT NOT NULL DEFAULT 'pending',
+      imported_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT valid_review_status CHECK (
+        review_status IN (
+          'pending',
+          'classified_not_verified',
+          'verified',
+          'rejected'
+        )
+      )
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_source_questions_level
+      ON source_questions(level);
+
+    CREATE INDEX IF NOT EXISTS idx_source_questions_review
+      ON source_questions(review_status);
+  `);
+
   const result = await pool.query(
     'SELECT COUNT(*) AS n FROM chapters'
   );
