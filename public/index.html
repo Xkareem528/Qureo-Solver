@@ -17,6 +17,8 @@ input{width:100%;padding:14px;border-radius:9px;border:1px solid #30394a;backgro
 input:focus{border-color:#5587ff}
 button{width:100%;border:0;border-radius:9px;background:#3269ed;color:white;padding:15px;font-size:16px;font-weight:bold;cursor:pointer;margin-top:20px}
 button:disabled{opacity:.6;cursor:wait}
+.solve-btn{width:auto;padding:8px 14px;font-size:13px;margin-top:0;background:#28a745}
+.solve-btn:hover{background:#218838}
 #message{margin-top:17px;color:#aab2c1;text-align:center;font-size:14px;line-height:1.8}
 .good{color:#49d69b}.bad{color:#ff7373}.warn{color:#ffc66d}
 .hidden{display:none}
@@ -27,6 +29,7 @@ button:disabled{opacity:.6;cursor:wait}
 .chapter{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:13px 0;border-bottom:1px solid #252c39}
 .chapter:last-child{border:0}
 .chapter-name{font-size:14px;line-height:1.6}
+.status-area{display:flex;align-items:center;gap:10px}
 .status{font-size:12px;white-space:nowrap}
 .course-title{font-size:19px;margin:0 0 10px}
 .error{background:#291c16;border:1px solid #69402b;color:#ffc18e;padding:12px;border-radius:9px;margin-top:12px;font-size:13px}
@@ -47,7 +50,7 @@ footer{text-align:center;color:#657083;font-size:12px;margin-top:25px}
 <input id="studentId" autocomplete="username" required placeholder="أدخل كود الطالب">
 <label for="password">كلمة المرور</label>
 <input id="password" type="password" autocomplete="current-password" required placeholder="أدخل كلمة المرور">
-<button id="startBtn" type="submit">ابدأ الحل</button>
+<button id="startBtn" type="submit">اتصال وجلب الفصول</button>
 </form>
 <div id="message" aria-live="polite">أدخل بيانات حسابك لبدء الاتصال بالمنصة.</div>
 </section>
@@ -65,6 +68,8 @@ footer{text-align:center;color:#657083;font-size:12px;margin-top:25px}
 
 <script>
 const $ = id => document.getElementById(id);
+let globalCredentials = {};
+
 const escapeHTML = value => String(value ?? '').replace(/[&<>"']/g, c => ({
 '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
 }[c]));
@@ -84,14 +89,23 @@ function renderCourses(user) {
     const rows = chapters.map(ch => {
       const completed = ch.status === 'completed';
       const missing = ch.status === 'missing';
-      const status = completed ? 'مكتمل' : missing ? 'بيانات غير متاحة' : 'غير مكتمل';
+      const statusText = completed ? 'مكتمل' : missing ? 'بيانات غير متاحة' : 'غير مكتمل';
       const cls = completed ? 'good' : missing ? 'warn' : 'bad';
+      
+      let actionBtn = '';
+      if (!completed && !missing) {
+        actionBtn = `<button class="solve-btn" onclick="solveChapter('${ch.id}', this)">حل الفصل</button>`;
+      }
+
       return `<div class="chapter">
         <div class="chapter-name">
           الفصل ${Number(ch.seq)} — ${escapeHTML(ch.name || 'بدون اسم')}
           <div class="sub">عدد الأسئلة: ${Number(ch.question_count || 0)}</div>
         </div>
-        <span class="status ${cls}">${status}</span>
+        <div class="status-area">
+          <span class="status ${cls}">${statusText}</span>
+          ${actionBtn}
+        </div>
       </div>`;
     }).join('');
 
@@ -111,6 +125,40 @@ function renderCourses(user) {
   });
 }
 
+async function solveChapter(chapterId, btnElement) {
+  if (!confirm('هل أنت متأكد من رغبتك في بدء حل هذا الفصل تلقائياً؟')) return;
+
+  const originalText = btnElement.textContent;
+  btnElement.disabled = true;
+  btnElement.textContent = 'جاري الحل...';
+
+  try {
+    const response = await fetch('/api/qureo/solve', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        chapter_id: chapterId,
+        student_id: globalCredentials.studentId,
+        password: globalCredentials.password
+      })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || 'فشل تنفيذ عملية الحل.');
+    }
+
+    alert('تم حل الفصل بنجاح!');
+    btnElement.textContent = 'مكتمل';
+    btnElement.style.background = '#49d69b';
+  } catch (error) {
+    alert('خطأ: ' + error.message);
+    btnElement.disabled = false;
+    btnElement.textContent = originalText;
+  }
+}
+
 $('loginForm').addEventListener('submit', async event => {
   event.preventDefault();
 
@@ -122,6 +170,8 @@ $('loginForm').addEventListener('submit', async event => {
 
   if (!studentId || !password) return;
 
+  globalCredentials = { studentId, password };
+
   button.disabled = true;
   button.textContent = 'جاري الاتصال...';
   message.textContent = 'جاري تسجيل الدخول وجلب بيانات الحساب والفصول...';
@@ -132,7 +182,7 @@ $('loginForm').addEventListener('submit', async event => {
     const response = await fetch('/api/qureo/connect', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({student_id:studentId,password})
+      body: JSON.stringify({student_id: studentId, password})
     });
 
     const data = await response.json();
@@ -148,13 +198,12 @@ $('loginForm').addEventListener('submit', async event => {
 
     renderCourses(user);
     $('account').classList.remove('hidden');
-    message.innerHTML = '<span class="good">تم تسجيل الدخول وجلب البيانات بنجاح.</span>';
+    message.innerHTML = '<span class="good">تم تسجيل الدخول وجلب البيانات بنجاح. اختر الفصل غير المكتمل واضغط "حل الفصل".</span>';
   } catch (error) {
     message.innerHTML = '<span class="bad">' + escapeHTML(error.message) + '</span>';
   } finally {
-    passwordInput.value = '';
     button.disabled = false;
-    button.textContent = 'ابدأ الحل';
+    button.textContent = 'اتصال وجلب الفصول';
   }
 });
 </script>
