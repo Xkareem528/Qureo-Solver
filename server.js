@@ -820,6 +820,72 @@ app.post('/api/qureo/connect', async (req, res) => {
   }
 });
 
+// مسار حل الفصل الجديد
+app.post('/api/qureo/solve', async (req, res) => {
+  const { chapter_id, student_id, password, db_answers_map } = req.body || {};
+
+  if (!chapter_id || !student_id || !password) {
+    return res.status(400).json({
+      success: false,
+      error: 'بيانات الفصل أو تسجيل الدخول غير صالحة'
+    });
+  }
+
+  if (!connectedAgent || connectedAgent.readyState !== 1) {
+    return res.status(503).json({
+      success: false,
+      error: 'Agent الموبايل غير متصل. شغّله أولاً.'
+    });
+  }
+
+  const id = crypto.randomUUID();
+
+  try {
+    const result = await new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingJobs.delete(id);
+        reject(new Error('timeout'));
+      }, 65000);
+
+      pendingJobs.set(id, { resolve, reject, timer });
+
+      connectedAgent.send(JSON.stringify({
+        type: 'solve',
+        id,
+        chapter_id,
+        student_id: student_id.trim(),
+        password,
+        db_answers_map: db_answers_map || {}
+      }), error => {
+        if (error) {
+          clearTimeout(timer);
+          pendingJobs.delete(id);
+          reject(error);
+        }
+      });
+    });
+
+    if (result && result.ok) {
+      return res.json({
+        success: true,
+        result: result.result
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: result?.error || 'فشل تنفيذ عملية الحل'
+    });
+  } catch (error) {
+    return res.status(error.message === 'timeout' ? 504 : 503).json({
+      success: false,
+      error: error.message === 'timeout'
+        ? 'انتهت مهلة حل الفصل'
+        : 'انقطع اتصال Agent الموبايل'
+    });
+  }
+});
+
 app.get('/api/qureo/status', async (req, res) => {
   try {
     const result = await openQureo();
@@ -842,4 +908,3 @@ app.get('/api/qureo/status', async (req, res) => {
 });
 
 startServer();
-        
