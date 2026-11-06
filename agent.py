@@ -115,50 +115,59 @@ def main():
         student_id = str(credentials.get("student_id", "")).strip()
         password = str(credentials.get("password", ""))
 
-        if not student_id or not password:
+        if not student_id:
             output({
                 "ok": False,
-                "error": "بيانات الدخول مطلوبة"
+                "error": "رقم الطالب مطلوب"
+            })
+            return
+
+        if action != "solve_chapter" and not password:
+            output({
+                "ok": False,
+                "error": "كلمة المرور مطلوبة"
             })
             return
 
         session = requests.Session()
         session.headers.update(HEADERS)
 
-        login = session.post(
-            PORTAL + "/oauth2/password-login",
-            json={
-                "student_id": student_id,
-                "password": password
-            },
-            headers={"Referer": PORTAL + "/login"},
-            allow_redirects=False,
-            timeout=25
-        )
+        # إذا لم يكن طلب حل مباشرة، نقوم بتسجيل الدخول التقليدي
+        if action != "solve_chapter":
+            login = session.post(
+                PORTAL + "/oauth2/password-login",
+                json={
+                    "student_id": student_id,
+                    "password": password
+                },
+                headers={"Referer": PORTAL + "/login"},
+                allow_redirects=False,
+                timeout=25
+            )
 
-        if login.status_code not in (200, 302, 303):
-            output({
-                "ok": False,
-                "stage": "login",
-                "status": login.status_code,
-                "error": "تعذر تسجيل الدخول"
-            })
-            return
+            if login.status_code not in (200, 302, 303):
+                output({
+                    "ok": False,
+                    "stage": "login",
+                    "status": login.status_code,
+                    "error": "تعذر تسجيل الدخول"
+                })
+                return
 
-        user_response = session.get(
-            PORTAL + "/oauth2/userinfo",
-            allow_redirects=False,
-            timeout=25
-        )
+            user_response = session.get(
+                PORTAL + "/oauth2/userinfo",
+                allow_redirects=False,
+                timeout=25
+            )
 
-        if user_response.status_code != 200:
-            output({
-                "ok": False,
-                "stage": "userinfo",
-                "status": user_response.status_code,
-                "error": "لم يتم تأكيد الجلسة"
-            })
-            return
+            if user_response.status_code != 200:
+                output({
+                    "ok": False,
+                    "stage": "userinfo",
+                    "status": user_response.status_code,
+                    "error": "لم يتم تأكيد الجلسة"
+                })
+                return
 
         # التعامل مع طلب حل الفصل عند إرسال action: solve_chapter
         if action == "solve_chapter":
