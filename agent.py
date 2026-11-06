@@ -18,44 +18,25 @@ def output(data):
 
 def fetch_course(session, available_course):
     content_id = available_course.get("content_id")
-
     if not content_id:
         return None
 
-    course_response = session.get(
-        f"{API}/courses/{content_id}",
-        timeout=25
-    )
+    course_response = session.get(f"{API}/courses/{content_id}", timeout=25)
     course_response.raise_for_status()
-
     course_data = course_response.json()
     course = course_data.get("course") or {}
     basic_section = course_data.get("basic_section") or {}
     section_id = basic_section.get("id")
-
     if not section_id:
         return None
 
-    section_response = session.get(
-        f"{API}/sections/{section_id}",
-        timeout=25
-    )
+    section_response = session.get(f"{API}/sections/{section_id}", timeout=25)
     section_response.raise_for_status()
+    chapters = section_response.json().get("chapters") or []
 
-    section_data = section_response.json()
-    chapters = section_data.get("chapters") or []
-
-    progress_response = session.get(
-        f"{API}/students/sections/{section_id}/chapters",
-        timeout=25
-    )
+    progress_response = session.get(f"{API}/students/sections/{section_id}/chapters", timeout=25)
     progress_response.raise_for_status()
-
-    records = progress_response.json()
-    progress_by_id = {
-        item.get("chapter_id"): item
-        for item in records
-    }
+    progress_by_id = {item.get("chapter_id"): item for item in progress_response.json()}
 
     chapter_results = []
     completed = 0
@@ -65,7 +46,6 @@ def fetch_course(session, available_course):
     for chapter in chapters:
         chapter_id = chapter.get("id")
         progress = progress_by_id.get(chapter_id)
-
         if progress is None:
             status = "missing"
             missing += 1
@@ -108,74 +88,66 @@ def main():
         if not raw_input:
             output({"ok": False, "error": "مدخلات فارغة"})
             return
-            
+
         credentials = json.loads(raw_input)
         action = credentials.get("action", "login")
 
         student_id = str(credentials.get("student_id", "")).strip()
         password = str(credentials.get("password", ""))
 
-        if not student_id:
+        if not student_id or not password:
             output({
                 "ok": False,
-                "error": "رقم الطالب مطلوب"
-            })
-            return
-
-        if action != "solve_chapter" and not password:
-            output({
-                "ok": False,
-                "error": "كلمة المرور مطلوبة"
+                "error": "رقم الطالب وكلمة المرور مطلوبان"
             })
             return
 
         session = requests.Session()
         session.headers.update(HEADERS)
 
-        # إذا لم يكن طلب حل مباشرة، نقوم بتسجيل الدخول التقليدي
-        if action != "solve_chapter":
-            login = session.post(
-                PORTAL + "/oauth2/password-login",
-                json={
-                    "student_id": student_id,
-                    "password": password
-                },
-                headers={"Referer": PORTAL + "/login"},
-                allow_redirects=False,
-                timeout=25
-            )
+        # تسجيل الدخول الأساسي لتفعيل الـ Session في جميع الحالات
+        login = session.post(
+            PORTAL + "/oauth2/password-login",
+            json={
+                "student_id": student_id,
+                "password": password
+            },
+            headers={"Referer": PORTAL + "/login"},
+            allow_redirects=False,
+            timeout=25
+        )
 
-            if login.status_code not in (200, 302, 303):
-                output({
-                    "ok": False,
-                    "stage": "login",
-                    "status": login.status_code,
-                    "error": "تعذر تسجيل الدخول"
-                })
-                return
+        if login.status_code not in (200, 302, 303):
+            output({
+                "ok": False,
+                "stage": "login",
+                "status": login.status_code,
+                "error": "تعذر تسجيل الدخول"
+            })
+            return
 
-            user_response = session.get(
-                PORTAL + "/oauth2/userinfo",
-                allow_redirects=False,
-                timeout=25
-            )
+        user_response = session.get(
+            PORTAL + "/oauth2/userinfo",
+            allow_redirects=False,
+            timeout=25
+        )
 
-            if user_response.status_code != 200:
-                output({
-                    "ok": False,
-                    "stage": "userinfo",
-                    "status": user_response.status_code,
-                    "error": "لم يتم تأكيد الجلسة"
-                })
-                return
+        if user_response.status_code != 200:
+            output({
+                "ok": False,
+                "stage": "userinfo",
+                "status": user_response.status_code,
+                "error": "لم يتم تأكيد الجلسة"
+            })
+            return
 
-        # التعامل مع طلب حل الفصل عند إرسال action: solve_chapter
+        # التعامل مع طلب حل الفصل بعد نجاح تسجيل الدخول
         if action == "solve_chapter":
             chapter_id = credentials.get("chapter_id")
             db_answers_map = credentials.get("db_answers_map", {})
-            
+
             solve_result = solve_chapter_questions(session, API, chapter_id, db_answers_map)
-            
+
             output({
                 "ok": True,
                 "action": "solve_chapter",
