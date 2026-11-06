@@ -27,7 +27,6 @@ def connect():
 
 def handle_login(ws, message):
     job_id = message.get("id")
-
     if not isinstance(job_id, str):
         return
 
@@ -44,9 +43,7 @@ def handle_login(ws, message):
             text=True,
             timeout=36
         )
-
         result = json.loads(process.stdout.strip())
-
     except subprocess.TimeoutExpired:
         result = {
             "ok": False,
@@ -56,6 +53,39 @@ def handle_login(ws, message):
         result = {
             "ok": False,
             "error": "فشل تشغيل أو قراءة نتيجة Agent"
+        }
+
+    ws.send(json.dumps({
+        "type": "result",
+        "id": job_id,
+        "result": result
+    }, ensure_ascii=False))
+
+def handle_solve(ws, message):
+    job_id = message.get("id")
+    if not isinstance(job_id, str):
+        return
+
+    payload = {
+        "action": "solve_chapter",
+        "chapter_id": message.get("chapter_id"),
+        "student_id": message.get("student_id", ""),
+        "password": message.get("password", "")
+    }
+
+    try:
+        process = subprocess.run(
+            [sys.executable, AGENT_FILE],
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            timeout=60
+        )
+        result = json.loads(process.stdout.strip())
+    except Exception:
+        result = {
+            "ok": False,
+            "error": "فشل تنفيذ عملية الحل التلقائي"
         }
 
     ws.send(json.dumps({
@@ -80,9 +110,12 @@ def main():
                     break
 
                 message = json.loads(raw)
+                msg_type = message.get("type")
 
-                if message.get("type") == "login":
+                if msg_type == "login":
                     handle_login(ws, message)
+                elif msg_type == "solve":
+                    handle_solve(ws, message)
 
         except KeyboardInterrupt:
             print("\nAgent stopped.")
@@ -99,3 +132,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
