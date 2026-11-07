@@ -145,3 +145,15 @@ async function startServer() {
 }
 
 startServer();
+
+// [تحديث الأージェنت] مسارات التحقق وتأكيد الاتصال
+let agentConnected = false;
+
+app.get('/api/agent-heartbeat', (req, res) => {
+    agentConnected = true;
+    res.status(200).json({ status: "connected" });
+});
+
+app.get('/api/agent-status', (req, res) => {
+    res.json({ online: agentConnected });
+});

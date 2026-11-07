@@ -8,6 +8,52 @@ SOURCE = Path.home() / "storage/shared/Download/Telegram/Qureo_prompts_levels_1_
 OUTPUT = Path(__file__).parent / "data" / "qureo_answers.json"
 REPORT = Path(__file__).parent / "data" / "parse_report.json"
 
+
+def contamination_marker(line):
+    s = line.strip()
+
+    patterns = [
+        r"^شروط الانتقال والتوقف$",
+        r"^أتمتة حل المستوى\s+\d+\s*[—-]\s*منصة Qureo$",
+        r"^ملاحظة:\s*قاعدة الإجابات",
+        r"^حل مراجعة المستوي\s*\d+$",
+        r"^حل مراجعة المستوى\s*\d+$",
+        r"^اجابه مراجعة المستوي\s*\d+$",
+        r"^اجابة مراجعة المستوي\s*\d+$",
+        r"^إجابة مراجعة المستوى\s*\d+$",
+        r"^اجابة المستوي\s+\S+",
+        r"^إجابة المستوى\s+\S+",
+        r"^مراجعة المستوي\s+\S+",
+        r"^مراجعة المستوى\s+\S+",
+        r"^قاعدة الإجابات$",
+        r"^سؤال$",
+        r"^تشغيل الكود$",
+        r"^حل اختبار المستوي\s+\S+",
+        r"^حل اختبار المستوى\s+\S+",
+        r"^(?:حل\s+)?اختبار منتصف الطريق المستوي\s*\S+",
+        r"^(?:حل\s+)?اختبار منتصف الطريق المستوى\s*\S+",
+        r"^(?:اجابة|إجابة) اختبار منتصف الطريق المستوي\s*\S+",
+        r"^(?:اجابة|إجابة) اختبار منتصف الطريق المستوى\s*\S+",
+        r"^={10,}$",
+    ]
+
+    return any(re.search(p, s) for p in patterns)
+
+
+def split_answer(raw_answer):
+    lines = raw_answer.splitlines()
+    kept = []
+    marker = None
+
+    for line in lines:
+        if contamination_marker(line):
+            marker = line.strip()
+            break
+        kept.append(line)
+
+    return "\n".join(kept).strip(), marker
+
+
 def classify(answer):
     text = answer.strip()
 
@@ -22,7 +68,17 @@ def classify(answer):
     ]):
         return "interactive"
 
-    if re.search(r'console\.log|let |const |var |if\s*\(|while\s*\(|for\s*\(', text):
+    has_code = bool(re.search(
+        r'console\.log|let |const |var |if\s*\(|while\s*\(|for\s*\(|function\s+|return\s+',
+        text
+    ))
+
+    has_arabic = bool(re.search(r'[\u0600-\u06FF]', text))
+
+    if has_code and has_arabic:
+        return "mixed"
+
+    if has_code:
         return "code"
 
     if any(x in text for x in ["الفراغ", "النواقص", "اكتب", "نكتب"]):
@@ -50,9 +106,10 @@ def main():
             return
 
         question = "\n".join(current["question_lines"]).strip()
-        answer = "\n".join(current["answer_lines"]).strip()
+        raw_answer = "\n".join(current["answer_lines"]).strip()
+        answer, marker = split_answer(raw_answer)
 
-        if not question and not answer:
+        if not question and not raw_answer:
             current = None
             return
 
@@ -66,6 +123,9 @@ def main():
             "question_label": current["label"],
             "question": question,
             "answer": answer,
+            "raw_answer": raw_answer,
+            "answer_truncated": marker is not None,
+            "contamination_marker": marker,
             "answer_type": classify(answer),
             "has_answer_marker": current["has_answer_marker"],
             "source_line": current["source_line"],
@@ -138,6 +198,9 @@ def main():
         "records_per_level": dict(sorted(levels.items())),
         "without_answer_marker": sum(
             not x["has_answer_marker"] for x in records
+        ),
+        "truncated_answers": sum(
+            x["answer_truncated"] for x in records
         )
     }
 
