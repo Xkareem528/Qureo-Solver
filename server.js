@@ -16,7 +16,6 @@ app.get('/api/health', (req, res) => {
   res.json({ ok: true, app: 'QUREO Solver', mode: 'polling' });
 });
 
-// طابور المهام البسيط والمستقر
 const pendingJobs = new Map();
 let lastAgentSeen = 0;
 
@@ -35,8 +34,20 @@ app.get('/agent/poll', verifyAgentAuth, (req, res) => {
   try {
     lastAgentSeen = Date.now();
     if (pendingJobs.size > 0) {
+      // جلب أول مهمة من الطابور
       const [jobId, jobData] = pendingJobs.entries().next().value;
-      return res.json({ job: { id: jobId, ...jobData } });
+      
+      // إرسال البيانات النظيفة فقط بدون الـ timer المعقد
+      return res.json({
+        job: {
+          id: jobId,
+          type: jobData.type,
+          chapter_id: jobData.chapter_id,
+          student_id: jobData.student_id,
+          password: jobData.password,
+          db_answers_map: jobData.db_answers_map
+        }
+      });
     }
     return res.json({ job: null });
   } catch (err) {
